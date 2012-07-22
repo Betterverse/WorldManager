@@ -40,10 +40,24 @@ public class WorldManager extends JavaPlugin implements Listener {
                         player.sendMessage(ChatColor.RED + "You do not have permission.");
                     }
                 } else {
-                    player.sendMessage(ChatColor.RED + "Invalid arguments. '/" + cmdLabel + " setspawn'");
+                    player.sendMessage(ChatColor.RED + "Invalid arguments.");
                 }
             } else if (args.length == 2) {
-                // TODO /wm tp <world>
+                if (args[0].equalsIgnoreCase("teleport") || args[0].equalsIgnoreCase("tp")) {
+                    World world = getServer().getWorld(args[1]);
+                    if (world != null) {
+                        if (player.hasPermission("worldmanager.teleport." + world.getName())) {
+                            player.teleport(getSpawnLocation(world));
+                            player.sendMessage(ChatColor.GREEN + "You have teleported to the spawn of the world " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + ".");
+                        } else {
+                            player.sendMessage(ChatColor.RED + "You do not have permission.");
+                        }
+                    } else {
+                        player.sendMessage(ChatColor.RED + "The world '" + args[1] + "' does not exist.");
+                    }
+                } else {
+                    player.sendMessage(ChatColor.RED + "Invalid arguments.");
+                }
             } else {
                 player.sendMessage(ChatColor.RED + "Invalid arguments.");
             }
@@ -65,10 +79,8 @@ public class WorldManager extends JavaPlugin implements Listener {
 
         // Load spawn locations
         for (String key : spawnFile.getKeys("")) {
-            spawns.put(
-                    key,
-                    new Location(getServer().getWorld(spawnFile.getString(key)), spawnFile.getDouble(key + ".x"), spawnFile.getDouble(key + ".y"), spawnFile.getDouble(key + ".z"), spawnFile
-                            .getLong(key + ".yaw"), spawnFile.getLong(key + ".pitch")));
+            spawns.put(key, new Location(getServer().getWorld(key), spawnFile.getDouble(key + ".x"), spawnFile.getDouble(key + ".y"), spawnFile.getDouble(key + ".z"), spawnFile.getLong(key + ".yaw"),
+                    spawnFile.getLong(key + ".pitch")));
         }
 
         getServer().getPluginManager().registerEvents(this, this);
@@ -92,10 +104,18 @@ public class WorldManager extends JavaPlugin implements Listener {
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         // Allow players to spawn at their beds if possible
         if (!event.isBedSpawn()) {
-            String world = event.getRespawnLocation().getWorld().getName();
-            if (spawns.containsKey(world)) {
-                event.setRespawnLocation(spawns.get(world));
+            World world = event.getRespawnLocation().getWorld();
+            if (spawns.containsKey(world.getName())) {
+                event.setRespawnLocation(getSpawnLocation(world));
             }
+        }
+    }
+
+    public Location getSpawnLocation(World world) {
+        if (spawns.containsKey(world.getName())) {
+            return spawns.get(world.getName());
+        } else {
+            return world.getSpawnLocation();
         }
     }
 
