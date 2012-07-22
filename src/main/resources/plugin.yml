@@ -1,0 +1,15 @@
+name: WorldManager
+main: net.betterverse.worldmanager.WorldManager
+version: 1.0
+author: aPunch
+commands:
+  wm:
+    description: Various WorldManager-related commands
+permissions:
+  worldmanager.*:
+    default: op
+    children:
+      worldmanager.admin.*:
+        children:
+          worldmanager.admin.setspawn: true
+      worldmanager.teleport.*: true
