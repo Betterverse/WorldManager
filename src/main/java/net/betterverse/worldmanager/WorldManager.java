@@ -39,6 +39,8 @@ public class WorldManager extends JavaPlugin implements Listener {
                     } else {
                         player.sendMessage(ChatColor.RED + "You do not have permission.");
                     }
+                } else if (args[0].equalsIgnoreCase("world")) {
+                    player.sendMessage(ChatColor.GREEN + "You are currently in the world " + ChatColor.YELLOW + player.getWorld().getName() + ChatColor.GREEN + ".");
                 } else {
                     player.sendMessage(ChatColor.RED + "Invalid arguments.");
                 }
