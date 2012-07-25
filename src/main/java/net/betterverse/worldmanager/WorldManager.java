@@ -6,9 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
-import net.betterverse.worldmanager.util.YamlFile;
-
 import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.Command;
@@ -16,12 +15,13 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class WorldManager extends JavaPlugin implements Listener {
-    private final Map<String, Location> spawns = new HashMap<String, Location>();
-    private YamlFile spawnFile;
+    private final Map<String, WorldOptions> worlds = new HashMap<String, WorldOptions>();
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String cmdLabel, String[] args) {
@@ -32,8 +32,7 @@ public class WorldManager extends JavaPlugin implements Listener {
                     if (player.hasPermission("worldmanager.admin.setspawn")) {
                         World world = player.getWorld();
                         Location spawnLoc = player.getLocation();
-                        spawns.put(world.getName(), spawnLoc);
-                        saveSpawn(world, spawnLoc);
+                        worlds.get(world.getName()).setSpawnLocation(spawnLoc);
 
                         player.sendMessage(ChatColor.GREEN + "You set the spawn of world " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + " to your location.");
                     } else {
@@ -49,10 +48,36 @@ public class WorldManager extends JavaPlugin implements Listener {
                     World world = getServer().getWorld(args[1]);
                     if (world != null) {
                         if (player.hasPermission("worldmanager.teleport." + world.getName())) {
-                            player.teleport(getSpawnLocation(world));
+                            player.teleport(worlds.get(world.getName()).getSpawnLocation());
                             player.sendMessage(ChatColor.GREEN + "You have teleported to the spawn of the world " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + ".");
                         } else {
                             player.sendMessage(ChatColor.RED + "You do not have permission.");
+                        }
+                    } else {
+                        player.sendMessage(ChatColor.RED + "The world '" + args[1] + "' does not exist.");
+                    }
+                } else {
+                    player.sendMessage(ChatColor.RED + "Invalid arguments.");
+                }
+            } else if (args.length == 4) {
+                if (args[0].equalsIgnoreCase("config")) {
+                    World world = getServer().getWorld(args[1]);
+                    if (world != null) {
+                        if (args[2].equalsIgnoreCase("gamemode") || args[2].equalsIgnoreCase("gm")) {
+                            if (player.hasPermission("worldmanager.admin.gamemode")) {
+                                try {
+                                    GameMode gameMode = GameMode.getByValue(Integer.parseInt(args[3]));
+                                    worlds.get(world.getName()).setGameMode(gameMode);
+                                    player.sendMessage(ChatColor.GREEN + "You have changed the game mode of " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + " to " + ChatColor.YELLOW
+                                            + gameMode + ChatColor.GREEN + ".");
+                                } catch (NumberFormatException ex) {
+                                    player.sendMessage(ChatColor.RED + "Invalid game mode '" + args[3] + "'.");
+                                }
+                            } else {
+                                player.sendMessage(ChatColor.RED + "You do not have permission.");
+                            }
+                        } else {
+                            player.sendMessage(ChatColor.RED + "Invalid arguments.");
                         }
                     } else {
                         player.sendMessage(ChatColor.RED + "The world '" + args[1] + "' does not exist.");
@@ -77,13 +102,8 @@ public class WorldManager extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        spawnFile = new YamlFile(this, new File(getDataFolder(), "spawns.yml"), "spawns");
-
-        // Load spawn locations
-        for (String key : spawnFile.getKeys("")) {
-            spawns.put(key, new Location(getServer().getWorld(key), spawnFile.getDouble(key + ".x"), spawnFile.getDouble(key + ".y"), spawnFile.getDouble(key + ".z"), spawnFile.getLong(key + ".yaw"),
-                    spawnFile.getLong(key + ".pitch")));
-        }
+        // Load world settings
+        loadWorlds();
 
         getServer().getPluginManager().registerEvents(this, this);
 
@@ -103,21 +123,20 @@ public class WorldManager extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onPlayerChangeWorld(PlayerChangedWorldEvent event) {
+        checkGameMode(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        checkGameMode(event.getPlayer());
+    }
+
+    @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         // Allow players to spawn at their beds if possible
         if (!event.isBedSpawn()) {
-            World world = event.getRespawnLocation().getWorld();
-            if (spawns.containsKey(world.getName())) {
-                event.setRespawnLocation(getSpawnLocation(world));
-            }
-        }
-    }
-
-    public Location getSpawnLocation(World world) {
-        if (spawns.containsKey(world.getName())) {
-            return spawns.get(world.getName());
-        } else {
-            return world.getSpawnLocation();
+            event.setRespawnLocation(worlds.get(event.getRespawnLocation().getWorld().getName()).getSpawnLocation());
         }
     }
 
@@ -129,13 +148,20 @@ public class WorldManager extends JavaPlugin implements Listener {
         log(Level.INFO, message);
     }
 
-    private void saveSpawn(World world, Location location) {
-        spawnFile.set(world.getName() + ".x", location.getX());
-        spawnFile.set(world.getName() + ".y", location.getY());
-        spawnFile.set(world.getName() + ".z", location.getZ());
-        spawnFile.set(world.getName() + ".pitch", location.getPitch());
-        spawnFile.set(world.getName() + ".yaw", location.getYaw());
+    private void checkGameMode(Player player) {
+        GameMode change = worlds.get(player.getWorld().getName()).getGameMode();
+        if (player.getGameMode() != change && !player.hasPermission("worldmanager.admin.gamemode")) {
+            player.setGameMode(change);
+        }
+    }
 
-        spawnFile.save();
+    private void loadWorlds() {
+        for (File file : getDataFolder().listFiles()) {
+            if (file.getName().endsWith(".yml")) {
+                WorldOptions options = new WorldOptions(this, file);
+                options.load();
+                worlds.put(file.getName().replace(".yml", ""), options);
+            }
+        }
     }
 }

@@ -16,18 +16,17 @@ public class YamlFile {
     private final File file;
     private final FileConfiguration config;
 
-    public YamlFile(WorldManager plugin, File file, String name) {
+    public YamlFile(WorldManager plugin, File file) {
         this.file = file;
         config = new YamlConfiguration();
-        name += ".yml";
 
         if (!file.exists()) {
             file.getParentFile().mkdirs();
             try {
                 file.createNewFile();
-                plugin.log("Created new file '" + name + "'.");
+                plugin.log("Created new file '" + file.getName() + "'.");
             } catch (IOException e) {
-                plugin.log(Level.SEVERE, "Could not create file '" + name + "'!");
+                plugin.log(Level.SEVERE, "Could not create file '" + file.getName() + "'!");
                 e.printStackTrace();
             }
         }

@@ -11,5 +11,6 @@ permissions:
     children:
       worldmanager.admin.*:
         children:
+          worldmanager.admin.gamemode: true
           worldmanager.admin.setspawn: true
       worldmanager.teleport.*: true
