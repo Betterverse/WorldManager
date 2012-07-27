@@ -1,6 +1,7 @@
 package net.betterverse.worldmanager;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,9 +16,14 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.weather.WeatherChangeEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class WorldManager extends JavaPlugin implements Listener {
@@ -102,9 +108,6 @@ public class WorldManager extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Load world settings
-        loadWorlds();
-
         getServer().getPluginManager().registerEvents(this, this);
 
         log(toString() + " enabled.");
@@ -120,6 +123,26 @@ public class WorldManager extends JavaPlugin implements Listener {
         builder.append("]");
 
         return builder.toString();
+    }
+
+    @EventHandler
+    public void onCreatureSpawn(CreatureSpawnEvent event) {
+        if (!worlds.get(event.getLocation().getWorld().getName()).canCreatureSpawn(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getDamager() instanceof Player && event.getEntity() instanceof Player) {
+            // Player is attacking another player, check for world's pvp setting
+            Player damager = (Player) event.getDamager();
+            if (!worlds.get(damager.getWorld().getName()).isPvPAllowed()) {
+                damager.sendMessage(ChatColor.RED + "PvP is not allowed in this world.");
+                ((Player) event.getEntity()).sendMessage(ChatColor.RED + "PvP is not allowed in this world.");
+                event.setCancelled(true);
+            }
+        }
     }
 
     @EventHandler
@@ -140,6 +163,26 @@ public class WorldManager extends JavaPlugin implements Listener {
         }
     }
 
+    @EventHandler
+    public void onRedstoneChange(BlockRedstoneEvent event) {
+        if (!worlds.get(event.getBlock().getWorld().getName()).isRedstoneAllowed()) {
+            event.setNewCurrent(0);
+        }
+    }
+
+    @EventHandler
+    public void onWeatherChange(WeatherChangeEvent event) {
+        // Prevent the weather from changing if the world's weather option is not "DEFAULT"
+        if (!worlds.get(event.getWorld().getName()).isWeather("DEFAULT")) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        checkWorldFile(event.getWorld());
+    }
+
     public void log(Level level, String message) {
         getServer().getLogger().log(level, "[" + getDescription().getName() + "] " + message);
     }
@@ -155,13 +198,25 @@ public class WorldManager extends JavaPlugin implements Listener {
         }
     }
 
-    private void loadWorlds() {
+    private void checkWorldFile(World world) {
         for (File file : getDataFolder().listFiles()) {
-            if (file.getName().endsWith(".yml")) {
-                WorldOptions options = new WorldOptions(this, file);
+            if (file.getName().equals(world.getName() + ".yml")) {
+                WorldOptions options = new WorldOptions(this, world, file);
                 options.load();
                 worlds.put(file.getName().replace(".yml", ""), options);
+                return;
             }
+        }
+
+        // Create new world file if one does not exist
+        File file = new File(getDataFolder(), world.getName() + ".yml");
+        try {
+            file.createNewFile();
+            WorldOptions options = new WorldOptions(this, world, file);
+            options.load();
+            worlds.put(file.getName().replace(".yml", ""), options);
+        } catch (IOException e) {
+            log(Level.SEVERE, "Could not create world file '" + file.getName() + "'.");
         }
     }
 }

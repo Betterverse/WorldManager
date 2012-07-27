@@ -38,6 +38,10 @@ public class YamlFile {
         return config.contains(key);
     }
 
+    public boolean getBoolean(String key) {
+        return config.getBoolean(key);
+    }
+
     public double getDouble(String key) {
         return config.getDouble(key);
     }
