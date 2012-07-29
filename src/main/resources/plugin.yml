@@ -2,6 +2,7 @@ name: WorldManager
 main: net.betterverse.worldmanager.WorldManager
 version: 1.0
 author: aPunch
+load: startup
 commands:
   wm:
     description: Various WorldManager-related commands

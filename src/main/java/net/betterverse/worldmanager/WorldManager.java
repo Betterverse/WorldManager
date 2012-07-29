@@ -199,7 +199,11 @@ public class WorldManager extends JavaPlugin implements Listener {
     }
 
     private void checkWorldFile(World world) {
-        for (File file : getDataFolder().listFiles()) {
+        File folder = getDataFolder();
+        if (!folder.exists()) {
+            folder.mkdir();
+        }
+        for (File file : folder.listFiles()) {
             if (file.getName().equals(world.getName() + ".yml")) {
                 WorldOptions options = new WorldOptions(this, world, file);
                 options.load();
@@ -209,7 +213,7 @@ public class WorldManager extends JavaPlugin implements Listener {
         }
 
         // Create new world file if one does not exist
-        File file = new File(getDataFolder(), world.getName() + ".yml");
+        File file = new File(folder, world.getName() + ".yml");
         try {
             file.createNewFile();
             WorldOptions options = new WorldOptions(this, world, file);
