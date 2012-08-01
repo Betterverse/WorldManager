@@ -118,7 +118,7 @@ public class WorldOptions {
 
     public void setRedstone(boolean redstone) {
         this.redstone = redstone;
-        file.set("pvp", redstone);
+        file.set("redstone", redstone);
         file.save();
     }
 
