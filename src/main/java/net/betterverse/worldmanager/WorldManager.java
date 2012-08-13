@@ -23,7 +23,6 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.weather.WeatherChangeEvent;
-import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class WorldManager extends JavaPlugin implements Listener {
@@ -38,7 +37,7 @@ public class WorldManager extends JavaPlugin implements Listener {
                     if (player.hasPermission("worldmanager.admin.setspawn")) {
                         World world = player.getWorld();
                         Location spawnLoc = player.getLocation();
-                        worlds.get(world.getName()).setSpawnLocation(spawnLoc);
+                        getWorld(world).setSpawnLocation(spawnLoc);
 
                         player.sendMessage(ChatColor.GREEN + "You set the spawn of world " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + " to your location.");
                     } else {
@@ -73,7 +72,7 @@ public class WorldManager extends JavaPlugin implements Listener {
                             if (player.hasPermission("worldmanager.admin.gamemode")) {
                                 try {
                                     GameMode gameMode = GameMode.getByValue(Integer.parseInt(args[3]));
-                                    worlds.get(world.getName()).setGameMode(gameMode);
+                                    getWorld(world).setGameMode(gameMode);
                                     player.sendMessage(ChatColor.GREEN + "You have changed the game mode of " + ChatColor.YELLOW + world.getName() + ChatColor.GREEN + " to " + ChatColor.YELLOW
                                             + gameMode + ChatColor.GREEN + ".");
                                 } catch (NumberFormatException ex) {
@@ -127,7 +126,7 @@ public class WorldManager extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onCreatureSpawn(CreatureSpawnEvent event) {
-        if (!worlds.get(event.getLocation().getWorld().getName()).canCreatureSpawn(event.getEntity())) {
+        if (!getWorld(event.getLocation().getWorld()).canCreatureSpawn(event.getEntity())) {
             event.setCancelled(true);
         }
     }
@@ -137,7 +136,7 @@ public class WorldManager extends JavaPlugin implements Listener {
         if (event.getDamager() instanceof Player && event.getEntity() instanceof Player) {
             // Player is attacking another player, check for world's pvp setting
             Player damager = (Player) event.getDamager();
-            if (!worlds.get(damager.getWorld().getName()).isPvPAllowed()) {
+            if (!getWorld(damager.getWorld()).isPvPAllowed()) {
                 damager.sendMessage(ChatColor.RED + "PvP is not allowed in this world.");
                 ((Player) event.getEntity()).sendMessage(ChatColor.RED + "PvP is not allowed in this world.");
                 event.setCancelled(true);
@@ -159,13 +158,13 @@ public class WorldManager extends JavaPlugin implements Listener {
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         // Allow players to spawn at their beds if possible
         if (!event.isBedSpawn()) {
-            event.setRespawnLocation(worlds.get(event.getRespawnLocation().getWorld().getName()).getSpawnLocation());
+            event.setRespawnLocation(getWorld(event.getRespawnLocation().getWorld()).getSpawnLocation());
         }
     }
 
     @EventHandler
     public void onRedstoneChange(BlockRedstoneEvent event) {
-        if (!worlds.get(event.getBlock().getWorld().getName()).isRedstoneAllowed()) {
+        if (!getWorld(event.getBlock().getWorld()).isRedstoneAllowed()) {
             event.setNewCurrent(0);
         }
     }
@@ -173,14 +172,9 @@ public class WorldManager extends JavaPlugin implements Listener {
     @EventHandler
     public void onWeatherChange(WeatherChangeEvent event) {
         // Prevent the weather from changing if the world's weather option is not "DEFAULT"
-        if (!worlds.get(event.getWorld().getName()).isWeather("DEFAULT")) {
+        if (!getWorld(event.getWorld()).isWeather("DEFAULT")) {
             event.setCancelled(true);
         }
-    }
-
-    @EventHandler
-    public void onWorldLoad(WorldLoadEvent event) {
-        checkWorldFile(event.getWorld());
     }
 
     public void log(Level level, String message) {
@@ -191,36 +185,44 @@ public class WorldManager extends JavaPlugin implements Listener {
         log(Level.INFO, message);
     }
 
-    private void checkGameMode(Player player) {
-        GameMode change = worlds.get(player.getWorld().getName()).getGameMode();
-        if (player.getGameMode() != change && !player.hasPermission("worldmanager.admin.gamemode")) {
-            player.setGameMode(change);
-        }
-    }
+    private WorldOptions getWorld(World world) {
+        String name = world.getName();
 
-    private void checkWorldFile(World world) {
-        File folder = getDataFolder();
-        if (!folder.exists()) {
-            folder.mkdir();
-        }
-        for (File file : folder.listFiles()) {
-            if (file.getName().equals(world.getName() + ".yml")) {
+        if (!worlds.containsKey(name)) {
+            // Check if file for the given world exists
+            File folder = getDataFolder();
+            if (!folder.exists()) {
+                folder.mkdir();
+            }
+            for (File file : folder.listFiles()) {
+                if (file.getName().equals(name + ".yml")) {
+                    WorldOptions options = new WorldOptions(this, world, file);
+                    options.load();
+                    worlds.put(name, options);
+                    return options;
+                }
+            }
+
+            // Create a new world file if the world does not have one yet
+            File file = new File(folder, name + ".yml");
+            try {
+                file.createNewFile();
                 WorldOptions options = new WorldOptions(this, world, file);
                 options.load();
-                worlds.put(file.getName().replace(".yml", ""), options);
-                return;
+                worlds.put(name, options);
+                return options;
+            } catch (IOException e) {
+                log(Level.SEVERE, "Could not create world file '" + file.getName() + "'.");
             }
         }
 
-        // Create new world file if one does not exist
-        File file = new File(folder, world.getName() + ".yml");
-        try {
-            file.createNewFile();
-            WorldOptions options = new WorldOptions(this, world, file);
-            options.load();
-            worlds.put(file.getName().replace(".yml", ""), options);
-        } catch (IOException e) {
-            log(Level.SEVERE, "Could not create world file '" + file.getName() + "'.");
+        return worlds.get(name);
+    }
+
+    private void checkGameMode(Player player) {
+        GameMode change = getWorld(player.getWorld()).getGameMode();
+        if (player.getGameMode() != change && !player.hasPermission("worldmanager.admin.gamemode")) {
+            player.setGameMode(change);
         }
     }
 }
